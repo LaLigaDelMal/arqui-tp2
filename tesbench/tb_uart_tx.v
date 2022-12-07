@@ -36,7 +36,7 @@ module tb_uart_tx();
          #6000
          tx_start = 1'b1;
          #6000
-         tx_start = 1'b0;       // Recordar bajar el start !!!
+         tx_start = 1'b0;
         
     end
     

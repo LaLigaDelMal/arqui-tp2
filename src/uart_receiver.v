@@ -42,10 +42,12 @@ module uart_receiver
     always @ (posedge i_clock) begin
         if (i_reset) begin
             data_counter <= {NDATA_COUNTER_BITS{1'b0}};
+            data <= {NDATA_BITS{1'b0}};
             stop_counter <= {NSTOP_COUNTER_BITS{1'b0}};
             tick_counter <= {NTICK_CTR_BITS{1'b0}};
             rx_samples_counter <= 4'b0000;
             rx_samples <= 3'b000;
+            rx_done <= 1'b0;
             state <= IDLE;
         end else begin
             tick_counter <= next_tick_counter;
@@ -74,10 +76,14 @@ module uart_receiver
 
             START: begin
                 if (i_baud) begin
-                    if (tick_counter == (OVERSAMPLING-7)) begin      // OVERSAMPLING - 10 ?  prueba y error no queda otra
-                        next_tick_counter = {NTICK_CTR_BITS{1'b0}};
-                        next_data_counter = {NDATA_COUNTER_BITS{1'b0}};
-                        next_state = DATA;
+                    if (tick_counter == (OVERSAMPLING-7)) begin     // Es 7 y no 16/2=8 porque se pierde un tick del generador de baudios en el cambio de estado
+                        if (~i_rx) begin
+                            rx_done = 1'b0;
+                            next_tick_counter = {NTICK_CTR_BITS{1'b0}};
+                            next_data_counter = {NDATA_COUNTER_BITS{1'b0}};
+                            next_state = DATA;
+                         end else
+                            next_state = IDLE;       
                     end else
                         next_tick_counter = tick_counter + 1'b1;
                 end
@@ -85,30 +91,18 @@ module uart_receiver
 
             DATA: begin
                 if (i_baud) begin
-                
-                    if (sampling) begin
-                        if (rx_samples_counter == 3) begin
-                            next_rx_samples_counter = 3'b000;
-                            data[data_counter] = (rx_samples[0] &  rx_samples[1]) & (rx_samples[1] &  rx_samples[2]) & (rx_samples[0] &  rx_samples[2]);  // Majority circuit
-                        end else begin
-                            next_rx_samples_counter = rx_samples_counter + 1'b1;
-                            sampling = 1'b0;
-                        end
-                    end
-                    
-                    if (tick_counter == (OVERSAMPLING-4)) begin
-                        
-                        sampling = 1'b1;
-                        
+                    if (tick_counter == (OVERSAMPLING-1)) begin
                         next_tick_counter = {NTICK_CTR_BITS{1'b0}};
-                        if (data_counter == NDATA_BITS-1) begin
-                            next_stop_counter = {NSTOP_COUNTER_BITS{1'b0}};
-                            next_state = STOP;
-                        end else begin
-                            next_data_counter = data_counter + 1'b1;
-                        end
-                    end else
+                        data[data_counter] = i_rx;
+                            if (data_counter == NDATA_BITS-1) begin
+                                next_stop_counter = {NSTOP_COUNTER_BITS{1'b0}};
+                                next_state = STOP;
+                            end else begin
+                                next_data_counter = data_counter + 1'b1;
+                            end
+                    end else begin
                         next_tick_counter = tick_counter + 1'b1;
+                    end
                 end
             end
 
@@ -117,9 +111,16 @@ module uart_receiver
                     if (tick_counter == (OVERSAMPLING-3)) begin
                         next_tick_counter = {NTICK_CTR_BITS{1'b0}};
                         if (stop_counter == NSTOP_BITS-1) begin
+                            rx_done = 1'b1;
                             next_state = IDLE;
                         end else begin
-                            next_stop_counter = stop_counter + 1'b1;
+                            if (i_rx) begin
+                                next_stop_counter = stop_counter + 1'b1;
+                            end else begin
+                                next_state = IDLE;
+                                next_stop_counter = {NSTOP_COUNTER_BITS{1'b0}};
+                                next_tick_counter = {NTICK_CTR_BITS{1'b0}};
+                            end 
                         end        
                     end else
                         next_tick_counter = tick_counter + 1'b1;
@@ -128,5 +129,9 @@ module uart_receiver
             
         endcase
     end
+    
+    // Output connections
+    assign o_data = data;
+    assign o_rx_done = rx_done;
     
 endmodule
