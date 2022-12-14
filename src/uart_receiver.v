@@ -91,7 +91,7 @@ module uart_receiver
 
             DATA: begin
                 if (i_baud) begin
-                    if (tick_counter == (OVERSAMPLING-1)) begin
+                    if (tick_counter == (OVERSAMPLING-3)) begin
                         next_tick_counter = {NTICK_CTR_BITS{1'b0}};
                         data[data_counter] = i_rx;
                             if (data_counter == NDATA_BITS-1) begin
