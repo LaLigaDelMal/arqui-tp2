@@ -46,12 +46,35 @@ module fifo #(
 		end
 	end
 
-    //READING
 	always @(*) begin
 	    next_index_write = index_write;
 	    next_index_read = index_read;
-	    
-		if(i_read && FIFO_status[index_read]) begin
+	end
+    
+    //WRITING
+    // When flag full is set you cannot write to FIFO you fool
+    always @(posedge i_write) begin
+        if(~FIFO_status[index_write]) begin
+			FIFO[index_write] = i_data;
+			FIFO_status[index_write] = 1'b1;
+						
+			empty = 0;
+			
+			if(index_write == LENGTH) begin
+				next_index_write = 0;
+			end
+		end
+		
+		if(&FIFO_status) begin
+			full = 1'b1;
+		end
+		
+        next_index_write = index_write + 1;
+    end
+    
+    //READING
+    always @(posedge i_read) begin
+        if(FIFO_status[index_read]) begin
 			dataOut = FIFO[index_read];
 			FIFO_status[index_read] = 1'b0;
 			next_index_read = index_read + 1;
@@ -67,27 +90,9 @@ module fifo #(
 			empty = 1;
 		end
 		
-        //WRITING
-        // When flag full is set you cannot write to FIFO you fool
-		if(i_write && ~FIFO_status[index_write]) begin
-			FIFO[index_write] = i_data;
-			FIFO_status[index_write] = 1'b1;
-			
-			//INCREMENTAR SOLO POR FLANCO DESCENDENTE DE i_write
-			next_index_write = index_write + 1;
-			empty = 0;
-			
-			if(index_write == LENGTH) begin
-				next_index_write = 0;
-			end 
-		end
-		
-		if(&FIFO_status) begin
-			full = 1'b1;
-		end
-
-	end
-
+        next_index_read = index_read + 1;
+    end
+    
 	assign o_data = dataOut;
 	assign o_empty = empty;
 	assign o_full = full;
