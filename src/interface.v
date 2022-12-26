@@ -32,19 +32,24 @@ module interface #(
     //wire alu_exception, alu_zero, alu_carry, alu_overflow, alu_negative, alu_done; //TODO: Checkear
     
     //// Finite State Machine 
-    localparam NSTATES = 5;
+    localparam NSTATES = 7;
     localparam NSTATE_BITS = $clog2(NSTATES);
     // States
-    localparam [NSTATE_BITS-1:0] IDLE = 0;
-    localparam [NSTATE_BITS-1:0] INPUT_A = 1;
-    localparam [NSTATE_BITS-1:0] INPUT_B  = 2;
-    localparam [NSTATE_BITS-1:0] INPUT_OPC  = 3;
-    localparam [NSTATE_BITS-1:0] SEND  = 4;
+    localparam [NSTATE_BITS-1:0] IDLE       = 0;
+    localparam [NSTATE_BITS-1:0] READ_RXFF  = 1;
+    localparam [NSTATE_BITS-1:0] INPUT_A    = 2;
+    localparam [NSTATE_BITS-1:0] INPUT_B    = 3;
+    localparam [NSTATE_BITS-1:0] INPUT_OPC  = 4;
+    localparam [NSTATE_BITS-1:0] WRITE_TXFF = 5;
+    localparam [NSTATE_BITS-1:0] END_WRITE  = 6;
+    
+    reg [NSTATE_BITS-1:0] inputs;
     
     //RESET
     always @(posedge i_clock) begin
          if(i_reset)begin
             state <= IDLE;
+            inputs <= 0;
          end
          else begin
             state <= next_state;
@@ -53,44 +58,61 @@ module interface #(
     
     
     always @(*) begin
-        //next_state = state;
-        
-        o_txff_write = 0;
-        o_rxff_read = 0;
+        next_state = state;        
         
         case(state)
             IDLE: begin
-                if(!i_rxff_empty) begin
-                    next_state = INPUT_A;
+                if(~i_rxff_empty) begin
+                    next_state = READ_RXFF;
                 end
             end
+            
+            READ_RXFF: begin
+                o_rxff_read = 1;
+                case(inputs)
+                    0:
+                        next_state = INPUT_A;
+                    1:
+                        next_state = INPUT_B;
+                    2:
+                        next_state = INPUT_OPC;
+                    default:
+                        inputs = 0;
+                 endcase
+            end
+            
             INPUT_A: begin
-                o_rxff_read = 1;
+                o_rxff_read = 0;
                 o_operandA = i_rxff_data;
-                
-                if(!i_rxff_empty) begin
-                    next_state = INPUT_B;
-                end
-            end
+                next_state = IDLE;
+                inputs = inputs + 1;
+            end 
+            
             INPUT_B: begin
-                o_rxff_read = 1;
+                o_rxff_read = 0;
                 o_operandB = i_rxff_data;
-                
-                if(!i_rxff_empty) begin
-                    next_state = INPUT_OPC;
-                end
+                next_state = IDLE;
+                inputs = inputs + 1;
             end
+            
             INPUT_OPC: begin
-                o_rxff_read = 1;
+                o_rxff_read = 0;
                 o_opcode = i_rxff_data[3:0];
-                next_state = SEND;
+                next_state = WRITE_TXFF;
+                inputs = 0;
             end
-            SEND: begin
-                if(!i_txff_full) begin
+            
+            WRITE_TXFF: begin
+                o_txff_data = i_result;
+                if(~i_txff_full) begin
                     o_txff_write = 1;
-                    o_txff_data = i_result;
-                    next_state = IDLE;
+                    next_state = END_WRITE;
                 end
+            end
+            
+            END_WRITE: begin
+                o_txff_write = 0;
+                next_state = IDLE;
             end
         endcase
         
