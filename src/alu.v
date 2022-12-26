@@ -14,7 +14,7 @@ module alu #(
     
     always @ (*) begin
         o_exception = 0;
-        o_zero = ~^o_result;
+        o_zero = ~|o_result[DATA_WIDTH-2:0]; //Checkear con Gaspar
         o_negative = o_result[DATA_WIDTH-1];
         o_carry = 0;
         o_overflow = 0;
