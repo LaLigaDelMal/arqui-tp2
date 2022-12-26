@@ -57,16 +57,10 @@ module fifo #(
         if(~FIFO_status[index_write]) begin
 			FIFO[index_write] = i_data;
 			FIFO_status[index_write] = 1'b1;
-						
-			empty = 0;
 			
 			if(index_write == LENGTH) begin
 				next_index_write = 0;
 			end
-		end
-		
-		if(&FIFO_status) begin
-			full = 1'b1;
 		end
 		
         next_index_write = index_write + 1;
@@ -79,22 +73,16 @@ module fifo #(
 			FIFO_status[index_read] = 1'b0;
 			next_index_read = index_read + 1;
 
-			full = 1'b0;
-
 			if(index_read == LENGTH) begin
 				next_index_read = 0;
 			end 
-		end
-
-		if( ~ ( |FIFO_status ) ) begin
-			empty = 1;
 		end
 		
         next_index_read = index_read + 1;
     end
     
 	assign o_data = dataOut;
-	assign o_empty = empty;
-	assign o_full = full;
+	assign o_empty = ~|FIFO_status;
+	assign o_full = &FIFO_status;
 
 endmodule
