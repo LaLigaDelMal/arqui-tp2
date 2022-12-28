@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module tb_fifo();
+module tb_interface();
     parameter DATA_WIDTH = 8;
     parameter FIFO_SIZE = 4;
     
