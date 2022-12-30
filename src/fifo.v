@@ -1,28 +1,26 @@
 `timescale 1ns / 1ps
 
 module fifo #(
-		parameter DATA_WIDTH = 8, //Columnas
-		parameter LENGTH = 4	 //Filas
-	)(
+		parameter WORD_WIDTH = 8, //Columnas
+		parameter SIZE = 4	 //Filas
+	) (
 	    input wire i_clock, i_reset,
-	    //Relevant for Reading: i_read, i_data, o_empty
-		
 		input wire i_read, i_write,
-		input wire [DATA_WIDTH-1:0] i_data, //For Writing to FIFO
+		input wire [WORD_WIDTH-1:0] i_data,  //For Writing to FIFO
 		
 		output wire o_empty, o_full,
-		output wire [DATA_WIDTH-1:0] o_data //For Reading from FIFO
+		output wire [WORD_WIDTH-1:0] o_data  //For Reading from FIFO
 	);
 	
-	localparam CTR_SZ = $clog2(LENGTH);
+	localparam CTR_SZ = $clog2(SIZE);
 	
 	reg empty;
 	reg full;
 	
-	reg [DATA_WIDTH-1:0] dataOut;
+	reg [WORD_WIDTH-1:0] dataOut;
 
-	reg [DATA_WIDTH-1:0] FIFO[LENGTH-1:0];
-	reg [LENGTH-1:0] FIFO_status;
+	reg [WORD_WIDTH-1:0] FIFO[SIZE-1:0];
+	reg [SIZE-1:0] FIFO_status;
 	
 	reg [CTR_SZ-1:0] index_read, index_write;
 	reg [CTR_SZ-1:0] next_index_read, next_index_write;
@@ -30,9 +28,9 @@ module fifo #(
 	integer i;
 	
     //RESET
-	always @(posedge i_clock) begin
+	always @ (posedge i_clock) begin
         if (i_reset) begin
-            FIFO_status <= {LENGTH{1'b0}};
+            FIFO_status <= {SIZE{1'b0}};
             full <= 1'b0;
             empty <= 1'b1;
             index_read <= {CTR_SZ{1'b0}};
@@ -46,19 +44,18 @@ module fifo #(
 		end
 	end
 
-	always @(*) begin
+	always @ (*) begin
 	    next_index_write = index_write;
 	    next_index_read = index_read;
 	end
     
     //WRITING
-    // When flag full is set you cannot write to FIFO you fool
-    always @(posedge i_write) begin
-        if(~FIFO_status[index_write]) begin
+    always @ (posedge i_write) begin
+        if (~FIFO_status[index_write]) begin
 			FIFO[index_write] = i_data;
 			FIFO_status[index_write] = 1'b1;
 			
-			if(index_write == LENGTH) begin
+			if(index_write == SIZE) begin
 				next_index_write = 0;
 			end
 		end
@@ -67,13 +64,13 @@ module fifo #(
     end
     
     //READING
-    always @(posedge i_read) begin
-        if(FIFO_status[index_read]) begin
+    always @ (posedge i_read) begin
+        if (FIFO_status[index_read]) begin
 			dataOut = FIFO[index_read];
 			FIFO_status[index_read] = 1'b0;
 			next_index_read = index_read + 1;
 
-			if(index_read == LENGTH) begin
+			if (index_read == SIZE) begin
 				next_index_read = 0;
 			end 
 		end

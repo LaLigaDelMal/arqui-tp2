@@ -1,30 +1,39 @@
 `timescale 1ns / 1ps
 //WIP
 module interface #(
-        parameter DATA_WIDTH = 8
-    )(
-        input  wire i_clock,
-        input  wire i_reset,
+        parameter WORD_WIDTH = 8
+    ) (
+        input  wire i_clock,  i_reset,
+        //ALU
+        input  wire [WORD_WIDTH-1:0] i_result,
+
+        output reg [WORD_WIDTH-1:0] o_operandA,
+        output reg [WORD_WIDTH-1:0] o_operandB,
+        output reg [WORD_WIDTH-1:0] o_opcode,
+
+        //INPUT FIFO
+        input  wire i_rxff_empty, i_rxff_full,
+        input  wire [WORD_WIDTH-1:0] i_rxff_data,
         
-        //RX FIFO WIRES
-        input  wire [DATA_WIDTH-1:0] i_rxff_data,
-        input  wire i_rxff_empty,
-        
-        output reg o_rxff_read,
-        
-        //ALU (Ordenado por orden de funcionamiento)
-        output reg [DATA_WIDTH-1:0] o_operandA,
-        output reg [DATA_WIDTH-1:0] o_operandB,
-        output reg [DATA_WIDTH-1:0] o_opcode,
-        
-        input  wire [DATA_WIDTH-1:0] i_result, 
-        
-        //FX FIFO WIRES
-        input  wire i_txff_full,
-        
-        output reg [DATA_WIDTH-1:0] o_txff_data,
-        output reg o_txff_write
-        
+        output reg [WORD_WIDTH-1:0] o_rxff_data,
+        output reg o_rxff_read, o_rxff_write,
+
+        //OUTPUT FIFO
+        input  wire i_txff_empty, i_txff_full,
+        input  wire [WORD_WIDTH-1:0] i_txff_data,
+
+        output reg o_txff_read, o_txff_write,
+        output reg [WORD_WIDTH-1:0] o_txff_data,
+
+        // RX
+        input wire [NDATA_BITS-1:0] i_rx_data,
+        input wire o_rx_done,
+
+        // TX
+        input wire o_tx_ready,
+
+        output reg i_tx_start,
+        output reg [NDATA_BITS-1:0] o_tx_data
     );    
     
     reg [3:0] state, next_state;
@@ -32,7 +41,7 @@ module interface #(
     //wire alu_exception, alu_zero, alu_carry, alu_overflow, alu_negative, alu_done; //TODO: Checkear
     
     //// Finite State Machine 
-    localparam NSTATES = 7;
+    localparam NSTATES = 6;
     localparam NSTATE_BITS = $clog2(NSTATES);
     // States
     localparam [NSTATE_BITS-1:0] IDLE       = 0;
@@ -57,19 +66,20 @@ module interface #(
     end    
     
     
-    always @(*) begin
+    always @ (*) begin
         next_state = state;        
         
-        case(state)
+        case (state)
             IDLE: begin
-                if(~i_rxff_empty) begin
+                o_txff_write = 0;
+                if (~i_rxff_empty) begin
                     next_state = READ_RXFF;
                 end
             end
             
             READ_RXFF: begin
                 o_rxff_read = 1;
-                case(inputs)
+                case (inputs)
                     0:
                         next_state = INPUT_A;
                     1:
@@ -104,18 +114,34 @@ module interface #(
             
             WRITE_TXFF: begin
                 o_txff_data = i_result;
-                if(~i_txff_full) begin
+                if (~i_txff_full) begin
                     o_txff_write = 1;
-                    next_state = END_WRITE;
+                    next_state = IDLE;
                 end
-            end
-            
-            END_WRITE: begin
-                o_txff_write = 0;
-                next_state = IDLE;
-            end
-        endcase
-        
+            end    
+        endcase   
     end
-       
+
+    // Controlar con el clock ?
+
+    // UART RX interface with FIFO
+    always @ (*) begin
+        o_rxff_write = 0;
+        if (o_rx_done && ~i_rxff_full) begin
+            i_rxff_data = i_rx_data;
+            o_rxff_write = 1;
+        end   
+    end
+
+    // UART TX interface with FIFO
+    always @ (*) begin
+        o_txff_read = 0;
+        i_tx_start = 0;
+        if (o_tx_ready && ~i_txff_empty) begin
+            o_txff_read = 1;
+            o_tx_data = o_txff_data;
+            i_tx_start = 1;
+        end
+    end   
+
 endmodule

@@ -5,16 +5,15 @@ module uart_transmitter
         parameter NDATA_BITS = 8,
         parameter NSTOP_BITS = 1,
         parameter OVERSAMPLING = 16
-      )
-      (
-        input wire [NDATA_BITS-1:0] i_data,
-        input wire i_clock,
+    ) (
+        input wire i_clock, i_reset,
         input wire i_baud,
-        input wire i_reset,
         input wire i_tx_start,
+        input wire [NDATA_BITS-1:0] i_data,
+        
         output wire o_tx,
         output wire o_tx_ready
-      );
+    );
     
     //// Finite State Machine 
     localparam NSTATES = 4;
