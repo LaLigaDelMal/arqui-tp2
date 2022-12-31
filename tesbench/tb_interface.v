@@ -1,21 +1,28 @@
 `timescale 1ns / 1ps
 
 module tb_interface();
-    parameter DATA_WIDTH = 8;
+    parameter WORD_WIDTH = 8;
     parameter FIFO_SIZE = 4;
     
     reg clk, rst;
     
     //Escribir en la fifo de RX
-    reg rxfifo_write;
-    reg [7:0] i_rx_data;
+    wire rxfifo_write;
+    wire [WORD_WIDTH-1:0] i_rx_data;
     
     //Interconexion
     wire rxff_empty, rxff_full, rxff_read;
-    wire [DATA_WIDTH-1:0] rxfifo_data;
+    wire [WORD_WIDTH-1:0] rxfifo_data;
+    
+    // RX y TX
+    reg [WORD_WIDTH-1:0] rx_data;
+    wire [WORD_WIDTH-1:0] tx_data;
+    reg rx_done;
+    reg tx_ready;
+    wire tx_start;
     
     // Rx_FIFO-->Interface
-    fifo #(.DATA_WIDTH(DATA_WIDTH),.LENGTH(FIFO_SIZE)) Rx_FIFO (
+    fifo #(.WORD_WIDTH(WORD_WIDTH),.SIZE(FIFO_SIZE)) Rx_FIFO (
         .i_clock(clk),
         .i_reset(rst),
         .i_read(rxff_read),
@@ -26,14 +33,14 @@ module tb_interface();
         .o_data(rxfifo_data)
     );
     
-    wire [DATA_WIDTH-1:0] txfifo_i_data;
-    reg txfifo_read;
+    wire [WORD_WIDTH-1:0] txfifo_i_data;
+    wire txfifo_read;
     wire txfifo_write;
     wire txfifo_empty, txfifo_full;
-    wire [DATA_WIDTH-1:0] txfifo_o_data;
+    wire [WORD_WIDTH-1:0] txfifo_o_data;
     
     // Tx_FIFO<--Interface
-    fifo #(.DATA_WIDTH(DATA_WIDTH),.LENGTH(FIFO_SIZE)) Tx_FIFO(
+    fifo #(.WORD_WIDTH(WORD_WIDTH),.SIZE(FIFO_SIZE)) Tx_FIFO(
         .i_clock(clk),
         .i_reset(rst),
         .i_read(txfifo_read),
@@ -45,13 +52,13 @@ module tb_interface();
     );
     
     //Interface solo deberia tener interconexión
-    wire [DATA_WIDTH-1:0] operandA, operandB;
-    wire [DATA_WIDTH-1:0] opcode;
+    wire [WORD_WIDTH-1:0] operandA, operandB;
+    wire [WORD_WIDTH-1:0] opcode;
        
     wire alu_exception, alu_zero, alu_carry, alu_overflow, alu_negative;
-    wire [DATA_WIDTH-1:0] alu_result;
+    wire [WORD_WIDTH-1:0] alu_result;
     
-    alu #(.DATA_WIDTH(DATA_WIDTH)) ALU (
+    alu #(.WORD_WIDTH(WORD_WIDTH)) ALU (
         .i_clock(clk),
         .i_reset(rst),
         .i_operandA(operandA),
@@ -68,16 +75,29 @@ module tb_interface();
     interface dut(
         .i_clock(clk),
         .i_reset(rst),
-        .i_rxff_data(rxfifo_data),
-        .i_rxff_empty(rxff_empty),
-        .o_rxff_read(rxff_read),        
+        .i_result(alu_result),
         .o_operandA(operandA),
         .o_operandB(operandB),
         .o_opcode(opcode),
-        .i_result(alu_result),
+        .i_rxff_empty(rxff_empty),
+        .i_rxff_full(rxff_full),
+        .i_rxff_data(rxfifo_data),
+        .o_rxff_read(rxff_read),
+        .o_rxff_write(rxfifo_write),
+        .o_rxff_data(rxfifo_data),
+        
+        .i_txff_empty(txfifo_empty),
         .i_txff_full(txfifo_full),
+        .i_txff_data(txfifo_o_data),
+        .o_txff_read(txfifo_read),
+        .o_txff_write(txfifo_write),
         .o_txff_data(txfifo_i_data),
-        .o_txff_write(txfifo_write)
+        
+        .i_rx_data(rx_data),
+        .i_rx_done(rx_done),
+        .i_tx_ready(tx_ready),
+        .o_tx_start(tx_start),
+        .o_tx_data(tx_data)
     );
     
     initial begin
@@ -85,7 +105,6 @@ module tb_interface();
         clk = 0;
         rst = 1;
         
-        txfifo_read = 0;
         #10 rst = 0;
      end
      
@@ -95,26 +114,28 @@ module tb_interface();
      
      always @(posedge clk, negedge clk) begin
         //$display("%t:: RX_FIFO_STATUS = %b, FIFO = %b", $time, Rx_FIFO.FIFO_status, Rx_FIFO.FIFO);
-        $display("%t:: TX_FIFO_STATUS = %b, INTER: STATE = %b, INTER_A = %b, B = %b, OPC = %b",
-                $time, Tx_FIFO.FIFO, interface.state, interface.o_operandA, interface.o_operandB, interface.o_opcode);
+       // $display("%t:: TX_FIFO_STATUS = %b, INTER: STATE = %b, INTER_A = %b, B = %b, OPC = %b",
+          //      $time, Tx_FIFO.FIFO, interface.state, interface.o_operandA, interface.o_operandB, interface.o_opcode);
+          $display("%t:: INTERFACE_RX_STATUS = %b, INTERFACE_TX_STATUS = %b, INTER: STATE = %b",    $time, interface.state_rx, interface.state_tx, interface.state);
      end
      
      initial begin
         #20
-                
-        rxfifo_write = 1;
-        i_rx_data = 8'b00000001;
-        #10 rxfifo_write = 0;
+         tx_ready = 1;
+         
+        rx_done = 1;
+        rx_data = 8'b00000001;
+        #10 rx_done = 0;
         
         #100
-        rxfifo_write = 1;
-        i_rx_data = 8'b00000010;
-        #10 rxfifo_write = 0;
+        rx_done = 1;
+        rx_data = 8'b00000010;
+        #10 rx_done = 0;
         
         #100
-        rxfifo_write = 1;
-        i_rx_data = 8'b00001000;
-        #10 rxfifo_write = 0;
+        rx_done = 1;
+        rx_data = 8'b00001000;
+        #10 rx_done = 0;
         
      end
 endmodule
